@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id            String         @id @default(uuid())
+  name          String
+  timezone      String         @default("UTC")
+  config        Json?
+  knowledgeBase String?        @db.Text
+  aiInstructions String?       @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  users         User[]
+  workflows     WorkflowRule[]
+  actionLogs    ActionLog[]
+
+  @@map("businesses")
+}
+
+model User {
+  id         String      @id @default(uuid())
+  email      String      @unique
+  password   String
+  name       String?
+  role       String      @default("manager")
+  businessId String
+  createdAt  DateTime    @default(now())
+  actionLogs ActionLog[]
+  approvals  Approval[]
+  business   Business    @relation(fields: [businessId], references: [id])
+
+  @@map("users")
+}
+
+model Conversation {
+  id             String    @id @default(uuid())
+  businessId     String
+  whatsappNumber String
+  metadata       Json?
+  lastMessageAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  business       Business  @relation(fields: [businessId], references: [id])
+  messages       Message[]
+
+  @@unique([businessId, whatsappNumber])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  role           String
+  content        String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  intents        Intent[]
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@map("messages")
+}
+
+model Intent {
+  id         String   @id @default(uuid())
+  messageId  String
+  intentName String
+  confidence Float
+  entities   Json?
+  createdAt  DateTime @default(now())
+  message    Message  @relation(fields: [messageId], references: [id])
+
+  @@map("intents")
+}
+
+model WorkflowRule {
+  id               String     @id @default(uuid())
+  businessId       String
+  intentName       String
+  minConfidence    Float      @default(0.7)
+  requiresApproval Boolean    @default(false)
+  responseTemplate String?
+  createdAt        DateTime   @default(now())
+  approvals        Approval[]
+  business         Business   @relation(fields: [businessId], references: [id])
+
+  @@map("workflow_rules")
+}
+
+model Approval {
+  id             String       @id @default(uuid())
+  workflowRuleId String
+  proposedAction Json
+  status         String       @default("PENDING")
+  reviewedBy     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  reviewer       User?        @relation(fields: [reviewedBy], references: [id])
+  workflowRule   WorkflowRule @relation(fields: [workflowRuleId], references: [id])
+
+  @@map("approvals")
+}
+
+model ActionLog {
+  id          String   @id @default(uuid())
+  businessId  String
+  actionType  String
+  payload     Json?
+  status      String
+  performedBy String?
+  createdAt   DateTime @default(now())
+  business    Business @relation(fields: [businessId], references: [id])
+  user        User?    @relation(fields: [performedBy], references: [id])
+
+  @@map("action_logs")
+}
